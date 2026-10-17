@@ -41,8 +41,8 @@ instead of fitting them per window, multiplies the fit error by a factor of
 14.6 uniformly across every window, ruling out the simplest fix one would
 try. A sixth, categorically different method -- a non-gradient, rule-based
 extractor with no joint cost function at all -- fails the same benchmark
-too, correlating weakly or negatively with truth on every one of its ten
-parameters (average $-0.04$, the worst of the six), which we read as
+too, correlating only weakly with truth on every one of its ten
+parameters (average $0.02$, the worst of the six), which we read as
 further, optimizer-independent evidence for the same conclusion. We also
 describe the subset of extraction relations that \emph{can} be
 derived directly from the model's own equations and validated exactly, the
@@ -750,18 +750,18 @@ noise-free Monte Carlo test. Bold marks the best method per row.}
 \toprule
 parameter & lsq & GA & directed GA & GA+lsq & CNN+lsq & rule-based \\
 \midrule
-$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 & $-$0.02 \\
-$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 & $-$0.08 \\
-$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 & $-$0.11 \\
-$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 & $-$0.12 \\
+$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 & 0.26 \\
+$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 & 0.02 \\
+$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 & $-$0.05 \\
+$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 & 0.03 \\
 $i_{on}$  & 0.24 & 0.06 & 0.00 & 0.04 & \textbf{0.78} & $-$0.06 \\
-$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} & $-$0.07 \\
-$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 & 0.09 \\
-$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 & $-$0.02 \\
-$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 & 0.05 \\
-$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 & $-$0.06 \\
+$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} & 0.08 \\
+$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 & $-$0.04 \\
+$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 & $-$0.07 \\
+$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 & $-$0.14 \\
+$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 & 0.20 \\
 \midrule
-average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 & $-$0.04 \\
+average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 & 0.02 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -819,17 +819,17 @@ output, the same continuity argument Section~\ref{sec:model} makes for
 the other five methods, with a retry from a fresh bootstrap whenever a
 cycle's own warm start fails to switch -- the same safeguard Section~\ref{sec:fitting}
 already uses for the other five. Under that protocol, every one of its
-ten free parameters varies freely across the 250-cycle run, yet every
-one correlates weakly or negatively with truth ($-0.12$ to $0.09$),
-giving the worst average of all six methods ($-0.04$). We read this as
-the same kind of evidence the bound-pinning pattern in
-Section~\ref{sec:difficulty} already provides for lsq/GA's $a_{on}$
-(Figure~\ref{fig:bound-pinning}): a method built entirely differently
-from the other five -- no gradient, no population, no learned prior,
-every update a one-line physical rule -- still fails to recover the
-same parameters the other five struggle with, which is independent
-evidence that the difficulty documented throughout this paper is a
-property of the data, not of any one optimization strategy.
+ten free parameters varies freely across the 250-cycle run and
+correlates only weakly with truth, positively or negatively
+($-0.14$ to $0.26$), giving the worst average of all six methods
+($0.02$). We read this as the same kind of evidence the bound-pinning
+pattern in Section~\ref{sec:difficulty} already provides for lsq/GA's
+$a_{on}$ (Figure~\ref{fig:bound-pinning}): a method built entirely
+differently from the other five -- no gradient, no population, no
+learned prior, every update a one-line physical rule -- still fails to
+recover the same parameters the other five struggle with, which is
+independent evidence that the difficulty documented throughout this
+paper is a property of the data, not of any one optimization strategy.
 
 \begin{figure}[t]
   \centering
@@ -837,8 +837,8 @@ property of the data, not of any one optimization strategy.
   \caption{Correlation with the true, noise-free synthetic parameter value,
   all ten free parameters, six extraction methods. No method is uniformly
   best; $i_{on}$ and $v_s$ are weakly recovered by every method except, for
-  $i_{on}$, the CNN surrogate. The rule-based extractor correlates weakly
-  or negatively with truth on every parameter.}
+  $i_{on}$, the CNN surrogate. The rule-based extractor correlates only
+  weakly with truth, positively or negatively, on every parameter.}
   \label{fig:method-comparison}
 \end{figure}
 

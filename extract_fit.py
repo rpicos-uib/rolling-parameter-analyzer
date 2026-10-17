@@ -95,13 +95,21 @@ def _frozen_off_mask(V_w):
 
 
 def extract_vs_vr(t_w, V_w, I_w, smooth_n=10):
-    """Apparent vs/vr via the production max(d2I/dV2) detector
-    (fit_region_pair.estimate_cycle_thresholds) -- the SAME heuristic
-    applied to data and model alike, so its own systematic bias (the
-    Ron/Roff IR-drop offset, RULES_DOC.md section 13.2; any peak-
-    picking bias) cancels in the (data - model) difference instead of
-    corrupting it. Returns (V_at_i_set, V_at_i_reset), either None if
-    that side has no active samples in this window.
+    """Apparent vs/vr via the better-validated per-side detectors
+    (fit_region_pair.estimate_cycle_thresholds_extracted: first positive
+    d2I/dt2 peak for vs, max d3I/dt3 at/before max d2I/dt2 for vr --
+    improved 2026-10-17, by request "check the apparent vr": the vr
+    side specifically was still on the older, weaker max(d2I/dV2)
+    detector shared with vs, even though RULES_DOC.md's own synthetic
+    validation found the d3-before-d2 detector nearly DOUBLES vr's
+    correlation with the true model value (0.513 vs 0.445-0.447) --
+    there was no reason left to keep using the weaker one for vr once a
+    validated, better one existed). The SAME heuristic is applied to
+    data and model alike, so its own systematic bias (the Ron/Roff
+    IR-drop offset, RULES_DOC.md section 13.2; any peak-picking bias)
+    cancels in the (data - model) difference instead of corrupting it.
+    Returns (V_at_i_set, V_at_i_reset), either None if that side has no
+    active samples in this window.
 
     RESET search is restricted to AFTER i_set (fixed 2026-10-14,
     confirmed on cycle 4155: "the transition is clearly well below the
@@ -114,13 +122,13 @@ def extract_vs_vr(t_w, V_w, I_w, smooth_n=10):
     documented and worked around for the analogous SET-side case. No
     equivalent SET-side ambiguity exists in this window shape (only
     one "V>0 & rising" stretch), so only RESET needs the restriction."""
-    i_set, _ = frp.estimate_cycle_thresholds(t_w, V_w, I_w, smooth_n)
+    i_set, _ = frp.estimate_cycle_thresholds_extracted(t_w, V_w, I_w, smooth_n)
     v_set = float(V_w[i_set]) if i_set is not None else None
     if i_set is not None and i_set + 1 < len(V_w):
-        _, i_reset_rel = frp.estimate_cycle_thresholds(t_w[i_set:], V_w[i_set:], I_w[i_set:], smooth_n)
+        _, i_reset_rel = frp.estimate_cycle_thresholds_extracted(t_w[i_set:], V_w[i_set:], I_w[i_set:], smooth_n)
         i_reset = i_set + i_reset_rel if i_reset_rel is not None else None
     else:
-        _, i_reset = frp.estimate_cycle_thresholds(t_w, V_w, I_w, smooth_n)
+        _, i_reset = frp.estimate_cycle_thresholds_extracted(t_w, V_w, I_w, smooth_n)
     v_reset = float(V_w[i_reset]) if i_reset is not None else None
     return v_set, v_reset
 
@@ -227,6 +235,61 @@ def extract_ron(V_w, I_w, mask_on, Ka, Ki):
     if total is None or Ka is None or Ki is None or Ka <= 0 or Ki <= 0:
         return None
     return total - 1.0 / (Ka * Ki)
+
+
+def extract_rs_turning_point(t_w, V_w, I_w, Ka, Ki, rs_bounds=(1.0, 500.0)):
+    """A second, independent Rs estimate (added 2026-10-17, by request
+    "check... the slope near zero, etc, we have many things to check"),
+    from the Vmax turning-point asymmetry (RULES_DOC.md /
+    memristor_model_turning_point_asymmetry): immediately after the
+    sweep's own peak, SET's hard gate switches off exactly at the turn,
+    so the post-peak slope alone is dI/dV = A with NO slow-term
+    contamination -- validated to ~0.13% median error against synthetic
+    ground truth, far tighter than the near-V=0 slope extract_ron
+    relies on (which is noisier -- a single finite difference over only
+    7 samples -- and, unlike this one, has no independent validation
+    number of its own).
+
+    Unlike the near-V=0 case (where VA~=0 regardless of Rs, so
+    J=Ka*Ki*cosh(Ka*VA)~=Ka*Ki exactly), VA at the peak is NOT small and
+    itself depends on Rs (VA=V-Rs*I), so A = J/(1+Rs*J) with
+    J=Ka*Ki*cosh(Ka*VA) is an implicit equation in Rs alone (Ka, Ki
+    taken from the current trial) -- solved via brentq over `rs_bounds`.
+    Returns None if the window has too few post-peak samples, Ka/Ki are
+    invalid, the post-peak slope isn't measurable, or brentq finds no
+    root in bounds (noise, or a trial Ka/Ki inconsistent with this
+    window's own measured A)."""
+    i_peak = int(np.argmax(V_w))
+    if i_peak >= len(V_w) - 1 or Ka is None or Ki is None or Ka <= 0 or Ki <= 0:
+        return None
+    dt = t_w[i_peak + 1] - t_w[i_peak]
+    if abs(dt) < 1e-12:
+        return None
+    dVdt = (V_w[i_peak + 1] - V_w[i_peak]) / dt
+    if abs(dVdt) < 1e-9:
+        return None
+    A = (I_w[i_peak + 1] - I_w[i_peak]) / dt / dVdt
+    if A <= 0:
+        return None
+    V_peak, I_peak = float(V_w[i_peak]), float(I_w[i_peak])
+
+    def h(Rs):
+        VA = V_peak - Rs * I_peak
+        J = Ka * Ki * np.cosh(Ka * VA)
+        return J / (1.0 + Rs * J) - A
+
+    lo, hi = rs_bounds
+    try:
+        hlo, hhi = h(lo), h(hi)
+        if hlo == 0.0:
+            return float(lo)
+        if hhi == 0.0:
+            return float(hi)
+        if hlo * hhi > 0:
+            return None
+        return float(brentq(h, lo, hi, xtol=1e-6))
+    except (ValueError, FloatingPointError, OverflowError):
+        return None
 
 
 def extract_roff(V_w, I_w, mask_off, Ka, Ki):
@@ -512,6 +575,15 @@ def extract_fit(t, V, I, i_vreset1, i_vset1, i_vreset2, x0_dict=None, bounds_dic
             return v_set_data, m
         if name == "ron":
             Ka, Ki = p["aon"], p["ion"]
+            # NOT combined with extract_rs_turning_point() (tried
+            # 2026-10-17, reverted): that relation assumes g is at (or
+            # near) 1 at Vmax, which Section 4.1 of the paper already
+            # flags as the atypical case -- checked directly here too,
+            # 248/250 real SET windows have g(Vmax)<0.8, so the
+            # turning-point read is almost always of the g-blend
+            # K(ron,roff,g_peak), not the ron endpoint itself. Using it
+            # unconditionally would trade a noisier but unbiased signal
+            # for a cleaner but systematically wrong one.
             return extract_ron(V_w, I_w, mask_on, Ka, Ki), extract_ron(V_w, I_model, mask_on, Ka, Ki)
         if name == "roff":
             Ka, Ki = p["aoff"], p["ioff"]
