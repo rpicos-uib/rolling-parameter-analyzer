@@ -567,8 +567,27 @@ exactly as the symmetric derivation predicts.
 
 \subsection{Mid-sweep kinks}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig_midsweep_kinks.pdf}
+  \caption{The real applied-voltage sweep is not a constant-rate ramp.
+  Left: one full real SET half-cycle's $V(t)$ (cycle 3022), with the
+  ramp-rate changes visible as genuine corners, not smoothing artifacts.
+  Right: a zoomed-in stretch of the same curve, with two ramp-rate jumps
+  located by \texttt{find\_mid\_sweep\_kinks()} (same detector and
+  default thresholds as the validation below), each labeled with its own
+  measured $\dot V$ before and after.}
+  \label{fig:midsweep}
+\end{figure}
+
 The real instrument does not ramp at a constant rate; it holds one
-$dV/dt$ for a run of samples and then jumps to another. Across such a jump,
+$dV/dt$ for a run of samples and then jumps to another, visibly so, as
+Figure~\ref{fig:midsweep} shows directly on real data: the left panel is
+one full real half-cycle's $V(t)$, with a piecewise-linear, not smoothly
+curved, shape even at this scale; the right panel zooms into a short
+stretch of it and marks two genuine ramp-rate jumps found by the same
+detector described below, each with its own before/after $\dot V$.
+Across such a jump,
 if $g$'s own gate state does not change and $dg/dt$ is locally constant
 (not zero, merely unchanging across the two samples), Eq.~\eqref{eq:decomposition}
 gives, for the difference between the two sides of the jump,
