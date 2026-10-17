@@ -32,7 +32,7 @@ established ridge/non-identifiability constraint, RULES_DOC.md section
 7/8); g0 is pinned via g0_override, same convention as the rest of
 this project's chained fits."""
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import brentq, least_squares
 
 import dmm_model as dmm
 import fit_region_pair as frp
@@ -242,58 +242,102 @@ def extract_roff(V_w, I_w, mask_off, Ka, Ki):
     return total - 1.0 / (Ka * Ki)
 
 
-def extract_Ka_Ki(V_w, I_w, mask, Rs, a_bounds):
-    """Two-probe EXACT inversion of I=Ki*sinh(Ka*VA) within `mask` (the
-    frozen ON or OFF segment): a NEAR probe (small |VA|, same spirit as
-    the 7-nearest-to-V=0 samples estimate_rs_half uses) and a FAR probe
-    (the largest |V| still inside this frozen segment, for the
-    strongest curvature signal), VA at each from V - Rs*I (Rs already
-    known from extract_ron/extract_roff). Solves
-    I_far*sinh(Ka*VA_near) - I_near*sinh(Ka*VA_far) = 0 for Ka via
-    brentq over `a_bounds` (aon/aoff's own DEFAULT_BOUNDS -- the
-    physical range), then Ki = I_near/sinh(Ka*VA_near).
+def extract_Ka_Ki(V_w, I_w, mask, Rs, a_bounds, i_bounds=None):
+    """Ka, Ki for I=Ki*sinh(Ka*VA) within `mask` (the frozen ON or OFF
+    segment), VA = V - Rs*I (Rs already known from extract_ron/
+    extract_roff). Two stages:
 
-    Returns (Ka, Ki), either None if the mask is too small, Rs is
-    unknown, the near/far probes end up too close together, or brentq
-    finds no sign change in `a_bounds` (an inconsistent/noisy
-    window)."""
+    1. Two-probe EXACT inversion (fast, and exact when it works): a
+    NEAR probe (small |VA|, same spirit as the 7-nearest-to-V=0 samples
+    estimate_rs_half uses) and a FAR probe (the largest |V| still
+    inside this frozen segment, for the strongest curvature signal).
+    Solves I_far*sinh(Ka*VA_near) - I_near*sinh(Ka*VA_far) = 0 for Ka
+    via brentq over `a_bounds`, then Ki = I_near/sinh(Ka*VA_near).
+
+    2. Bounded nonlinear least-squares over EVERY sample in `mask`
+    (added 2026-10-17, by request, after the two-probe stage was found
+    silently freezing aoff/ioff for an entire 250-cycle Monte Carlo
+    chain): stage 1 rests on exactly TWO samples, so a single noisy or
+    off-branch probe (the frozen ON/OFF mask spans the WHOLE half-cycle,
+    rising and falling branches alike, which can disagree at matched
+    |V| under real hysteresis) can leave `g(lo)` and `g(hi)` the same
+    sign with no root in `a_bounds` at all -- not a property of the
+    device, a property of having thrown away every sample but two.
+    Refitting (Ka, Ki) jointly against the FULL masked segment is far
+    less sensitive to any one bad sample and has no sign-change
+    precondition to fail. Seeded from stage 1 when it succeeded (its
+    exact answer is normally an excellent start), else from the
+    bounds' own geometric/arithmetic midpoints.
+
+    Returns (Ka, Ki), or (None, None) only if the mask is too small,
+    Rs is unknown, or every sample inside it has |VA|~0 (truly no
+    signal to fit against, not a precondition this stage could relax)."""
     idx = np.flatnonzero(mask)
     if len(idx) < 7 or Rs is None:
         return None, None
     Vm, Im = V_w[idx], I_w[idx]
-    order = np.argsort(np.abs(Vm))
-    Vm, Im = Vm[order], Im[order]
-    VA = Vm - Rs * Im
-    j_near = min(3, len(VA) - 1)
-    j_far = len(VA) - 1
-    VA_near, I_near = VA[j_near], Im[j_near]
-    VA_far, I_far = VA[j_far], Im[j_far]
-    if abs(VA_far - VA_near) < 1e-6 or abs(VA_near) < 1e-9:
+    VA_all = Vm - Rs * Im
+    if np.max(np.abs(VA_all)) < 1e-9:
         return None, None
 
-    def g(Ka):
-        return I_far * np.sinh(Ka * VA_near) - I_near * np.sinh(Ka * VA_far)
+    order = np.argsort(np.abs(Vm))
+    Vm_s, Im_s = Vm[order], Im[order]
+    VA_s = Vm_s - Rs * Im_s
+    j_near = min(3, len(VA_s) - 1)
+    j_far = len(VA_s) - 1
+    VA_near, I_near = VA_s[j_near], Im_s[j_near]
+    VA_far, I_far = VA_s[j_far], Im_s[j_far]
 
     lo, hi = a_bounds
+    Ka_probe = Ki_probe = None
+    if abs(VA_far - VA_near) >= 1e-6 and abs(VA_near) >= 1e-9:
+        def g(Ka):
+            return I_far * np.sinh(Ka * VA_near) - I_near * np.sinh(Ka * VA_far)
+        try:
+            glo, ghi = g(lo), g(hi)
+            if glo == 0.0:
+                Ka_probe = lo
+            elif ghi == 0.0:
+                Ka_probe = hi
+            elif glo * ghi < 0:
+                Ka_probe = brentq(g, lo, hi, xtol=1e-6)
+        except (ValueError, FloatingPointError, OverflowError):
+            Ka_probe = None
+        if Ka_probe is not None:
+            sh = np.sinh(Ka_probe * VA_near)
+            if abs(sh) >= 1e-15:
+                Ki_cand = I_near / sh
+                if Ki_cand > 0:
+                    Ki_probe = Ki_cand
+            if Ki_probe is None:
+                Ka_probe = None
+
+    if Ka_probe is not None and Ki_probe is not None:
+        return float(Ka_probe), float(Ki_probe)
+
+    # Stage 2: bounded least-squares over the whole masked segment.
+    i_lo, i_hi = i_bounds if i_bounds is not None else (1e-8, 1e4)
+    with np.errstate(over="ignore"):
+        Ki_scale = float(np.clip(np.max(np.abs(Im)) / max(np.sinh(hi * np.max(np.abs(VA_all))), 1e-12),
+                                  i_lo, i_hi))
+
+    def resid(x):
+        Ka, Ki = x
+        with np.errstate(over="ignore"):
+            return Ki * np.sinh(Ka * VA_all) - Im
+
+    x0 = [Ka_probe if Ka_probe is not None else 0.5 * (lo + hi),
+          Ki_probe if Ki_probe is not None else Ki_scale]
+    x0[0] = float(np.clip(x0[0], lo, hi))
+    x0[1] = float(np.clip(x0[1], i_lo, i_hi))
     try:
-        glo, ghi = g(lo), g(hi)
-        if glo == 0.0:
-            Ka = lo
-        elif ghi == 0.0:
-            Ka = hi
-        elif glo * ghi > 0:
-            return None, None
-        else:
-            Ka = brentq(g, lo, hi, xtol=1e-6)
+        res = least_squares(resid, x0, bounds=([lo, i_lo], [hi, i_hi]), max_nfev=200)
     except (ValueError, FloatingPointError, OverflowError):
         return None, None
-    sh = np.sinh(Ka * VA_near)
-    if abs(sh) < 1e-15:
+    Ka_fit, Ki_fit = float(res.x[0]), float(res.x[1])
+    if Ki_fit <= 0:
         return None, None
-    Ki = I_near / sh
-    if Ki <= 0:
-        return None, None
-    return float(Ka), float(Ki)
+    return Ka_fit, Ki_fit
 
 
 def extract_eta_width(t_w, V_w, I_w, i_anchor, smooth_n=10, half_window=60):
@@ -474,13 +518,13 @@ def extract_fit(t, V, I, i_vreset1, i_vset1, i_vreset2, x0_dict=None, bounds_dic
             return extract_roff(V_w, I_w, mask_off, Ka, Ki), extract_roff(V_w, I_model, mask_off, Ka, Ki)
         if name in ("aon", "ion"):
             Rs = p["ron"]
-            Ka_d, Ki_d = extract_Ka_Ki(V_w, I_w, mask_on, Rs, bounds_dict["aon"])
-            Ka_m, Ki_m = extract_Ka_Ki(V_w, I_model, mask_on, Rs, bounds_dict["aon"])
+            Ka_d, Ki_d = extract_Ka_Ki(V_w, I_w, mask_on, Rs, bounds_dict["aon"], bounds_dict["ion"])
+            Ka_m, Ki_m = extract_Ka_Ki(V_w, I_model, mask_on, Rs, bounds_dict["aon"], bounds_dict["ion"])
             return (Ka_d, Ka_m) if name == "aon" else (Ki_d, Ki_m)
         if name in ("aoff", "ioff"):
             Rs = p["roff"]
-            Ka_d, Ki_d = extract_Ka_Ki(V_w, I_w, mask_off, Rs, bounds_dict["aoff"])
-            Ka_m, Ki_m = extract_Ka_Ki(V_w, I_model, mask_off, Rs, bounds_dict["aoff"])
+            Ka_d, Ki_d = extract_Ka_Ki(V_w, I_w, mask_off, Rs, bounds_dict["aoff"], bounds_dict["ioff"])
+            Ka_m, Ki_m = extract_Ka_Ki(V_w, I_model, mask_off, Rs, bounds_dict["aoff"], bounds_dict["ioff"])
             return (Ka_d, Ka_m) if name == "aoff" else (Ki_d, Ki_m)
         if name == "etas":
             return (extract_eta_width_masked(t_w, V_w, I_w, mask_on, smooth_n),

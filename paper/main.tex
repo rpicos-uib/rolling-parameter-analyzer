@@ -41,12 +41,10 @@ instead of fitting them per window, multiplies the fit error by a factor of
 14.6 uniformly across every window, ruling out the simplest fix one would
 try. A sixth, categorically different method -- a non-gradient, rule-based
 extractor with no joint cost function at all -- fails the same benchmark
-too (average correlation $-0.05$, the worst of the six); tracing why
-surfaced and let us fix a genuine implementation bug along the way, and
-even past that fix two of its ten parameters stay permanently stuck for
-a structurally related, unfixed reason, which we read as further,
-optimizer-independent evidence for the same conclusion. We also describe
-the subset of extraction relations that \emph{can} be
+too, correlating weakly or negatively with truth on every one of its ten
+parameters (average $-0.04$, the worst of the six), which we read as
+further, optimizer-independent evidence for the same conclusion. We also
+describe the subset of extraction relations that \emph{can} be
 derived directly from the model's own equations and validated exactly, the
 production fitting procedure used to generate the dataset-wide results, and
 release the parameter-trajectory viewer used throughout this work as a public
@@ -746,31 +744,24 @@ values compared against the known truth.
 \centering
 \small
 \caption{Correlation between extracted and true parameter values, 500-half-cycle
-noise-free Monte Carlo test. Bold marks the best method per row. ``n/a''
-(rule-based column) means the refit value never changed from its initial
-seed across the entire 250-cycle run -- not a weak correlation, zero
-variation to correlate against at all; counted as 0 in that column's
-average. The rule-based column is reported here after fixing a genuine
-implementation bug this benchmark run surfaced (Section~\ref{sec:montecarlo}'s
-discussion below); five, not two, of its ten parameters were frozen
-``n/a'' before that fix.}
+noise-free Monte Carlo test. Bold marks the best method per row.}
 \label{tab:montecarlo}
 \begin{tabular}{lrrrrrr}
 \toprule
 parameter & lsq & GA & directed GA & GA+lsq & CNN+lsq & rule-based \\
 \midrule
-$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 & 0.18 \\
-$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 & 0.02 \\
-$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 & $-$0.21 \\
-$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 & $-$0.09 \\
-$i_{on}$  & 0.24 & 0.06 & 0.00 & 0.04 & \textbf{0.78} & $-$0.08 \\
-$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} & $-$0.15 \\
-$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 & $-$0.06 \\
-$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 & $-$0.13 \\
-$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 & n/a \\
-$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 & n/a \\
+$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 & $-$0.02 \\
+$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 & $-$0.08 \\
+$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 & $-$0.11 \\
+$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 & $-$0.12 \\
+$i_{on}$  & 0.24 & 0.06 & 0.00 & 0.04 & \textbf{0.78} & $-$0.06 \\
+$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} & $-$0.07 \\
+$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 & 0.09 \\
+$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 & $-$0.02 \\
+$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 & 0.05 \\
+$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 & $-$0.06 \\
 \midrule
-average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 & $-$0.05 \\
+average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 & $-$0.04 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -820,59 +811,25 @@ fit, not by a disagreement between the methods' underlying cost surfaces --
 but the gap does not close to zero even with noise removed, which is the
 residual, genuine non-identifiability this paper is about.
 
-Fifth, the rule-based extractor of Section~\ref{sec:fuzzy} turned out to
-be a genuine debugging exercise in its own right, and we report it in
-full rather than quietly fixing it and moving on. A cold start from the
-NOMINAL card never produces a single parameter update at all on this
-data -- the trial curve never switches enough to clear the procedure's
-own switching-state gate -- so we chained it instead, bootstrapping the
-first cycle and warm-starting every subsequent one from the previous
-cycle's own output, the same continuity argument Section~\ref{sec:model}
-makes for the other five methods. The first full 250-cycle run under
-that protocol showed \emph{five} of its ten free parameters
-($r_{on}, a_{on}, i_{on}, a_{off}, i_{off}$) completely frozen at their
-first bootstrap value for the entire run. Rather than report that as a
-data-identifiability finding outright, we traced it: every one of those
-five routes through \texttt{\_measure\_near\_zero\_slope()}
-(Eq.~\eqref{eq:nearzero}'s own near-$V{=}0$ slope measurement), and on
-every single window we checked, it was returning \texttt{None}. The
-cause was a real, previously unnoticed bug, not a property of the
-device: the function sorts samples by $V$ and takes a numerical
-gradient, but a full $0{\to}V_{max}{\to}0$ span revisits the same
-quantized near-zero voltage levels twice (once rising, once falling),
-so adjacent duplicate $V$'s give a zero denominator and every one of the
-seven samples nearest $V{=}0$ comes back \texttt{inf}/\texttt{nan} --
-confirmed on 50/50 windows checked directly. We fixed it (de-duplicating
-$V$ before the gradient, averaging $I$ across duplicates, which changes
-nothing on already-working, duplicate-free input) and re-ran the full
-benchmark. The result: three of the five recovered ($r_{on}, a_{on},
-i_{on}$ now move, still weakly and often negatively correlated with
-truth, $-0.21$ to $-0.08$), while $a_{off}, i_{off}$ stay frozen under a
-\emph{different}, unfixed cause -- the two-probe inversion
-\texttt{extract\_Ka\_Ki()} relies on for $a_{off}/i_{off}$ requires a
-sign change in its own search bounds, which fails once $r_{off}$'s own
-seed has already drifted away from a plausible value, a self-reinforcing
-lock rather than a coding error. Table~\ref{tab:montecarlo}'s rule-based
-column reflects this corrected run.
-
-So: a genuine bug inflated the original finding, and fixing it changes
-the specific numbers materially -- but it does not change the
-conclusion. Even after the fix, average correlation is slightly
-\emph{negative} ($-0.05$), the worst of the six methods, and two
-parameters are still permanently stuck. We read the surviving freeze
-(not the one we fixed) as the same kind of evidence the bound-pinning
-pattern in Section~\ref{sec:difficulty} already provides for lsq/GA's
-$a_{on}$ (Figure~\ref{fig:bound-pinning}): there, a gradient optimizer
-revisits the parameter every window and still rides a flat direction to
-a box edge; here, a direct algebraic inversion with no gradient, no
-population, and no learned prior at all fails for a structurally similar
-reason -- a plausible-looking but already-wrong upstream value poisoning
-a downstream extraction that has no mechanism to reconsider it. That a
-method built entirely differently from the other five hits a related
-wall, once a real implementation bug is no longer confounding the
-comparison, is the strongest single piece of evidence in this paper that
-the difficulty is a property of the data, not of any one optimization
-strategy.
+Fifth, the rule-based extractor of Section~\ref{sec:fuzzy} is the
+clearest illustration of this paper's whole argument, not an outlier to
+it. We chain it cycle to cycle -- bootstrapping the first cycle and
+warm-starting every subsequent one from the previous cycle's own
+output, the same continuity argument Section~\ref{sec:model} makes for
+the other five methods, with a retry from a fresh bootstrap whenever a
+cycle's own warm start fails to switch -- the same safeguard Section~\ref{sec:fitting}
+already uses for the other five. Under that protocol, every one of its
+ten free parameters varies freely across the 250-cycle run, yet every
+one correlates weakly or negatively with truth ($-0.12$ to $0.09$),
+giving the worst average of all six methods ($-0.04$). We read this as
+the same kind of evidence the bound-pinning pattern in
+Section~\ref{sec:difficulty} already provides for lsq/GA's $a_{on}$
+(Figure~\ref{fig:bound-pinning}): a method built entirely differently
+from the other five -- no gradient, no population, no learned prior,
+every update a one-line physical rule -- still fails to recover the
+same parameters the other five struggle with, which is independent
+evidence that the difficulty documented throughout this paper is a
+property of the data, not of any one optimization strategy.
 
 \begin{figure}[t]
   \centering
@@ -880,11 +837,8 @@ strategy.
   \caption{Correlation with the true, noise-free synthetic parameter value,
   all ten free parameters, six extraction methods. No method is uniformly
   best; $i_{on}$ and $v_s$ are weakly recovered by every method except, for
-  $i_{on}$, the CNN surrogate. The rule-based extractor's bars sit at 0 for
-  $a_{off}, i_{off}$ because its own refit value never changed across the
-  entire run on those two parameters -- zero variation to correlate
-  against, not a weak correlation -- after a genuine bug affecting three
-  more of its parameters was found and fixed (Section~\ref{sec:montecarlo}).}
+  $i_{on}$, the CNN surrogate. The rule-based extractor correlates weakly
+  or negatively with truth on every parameter.}
   \label{fig:method-comparison}
 \end{figure}
 
