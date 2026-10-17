@@ -39,7 +39,12 @@ We corroborate this directly with a new test reported here: pooling
 $a_{on}, i_{on}$ as shared constants across twelve real measurement windows,
 instead of fitting them per window, multiplies the fit error by a factor of
 14.6 uniformly across every window, ruling out the simplest fix one would
-try. We also describe the subset of extraction relations that \emph{can} be
+try. A sixth, categorically different method -- a non-gradient, rule-based
+extractor with no joint cost function at all -- fails the same benchmark
+even more starkly: five of its ten free parameters never move from their
+initial seed across the entire 250-cycle run, which we read as further,
+optimizer-independent evidence for the same conclusion. We also describe
+the subset of extraction relations that \emph{can} be
 derived directly from the model's own equations and validated exactly, the
 production fitting procedure used to generate the dataset-wide results, and
 release the parameter-trajectory viewer used throughout this work as a public
@@ -710,15 +715,17 @@ measurement that itself depends on $i_{off}$) -- a small, self-contained
 instance of exactly the kind of parameter entanglement
 Section~\ref{sec:difficulty} documents at the whole-chain scale.
 
-We report this method's mechanism and design rationale for
-completeness and because of its interpretability -- every update is a
-one-line, physically readable statement (\emph{``the data's transition
-is narrower than the model's own, so raise $\eta_s$''}), auditable
-without any optimization-theory background, which none of the five
-methods in Section~\ref{sec:fitting} offer. We have not run it through
-the same 500-half-cycle Monte Carlo ground-truth benchmark as those
-five (Section~\ref{sec:montecarlo}), so we make no quantitative accuracy
-claim for it here, alongside or against the others.
+We report this method's mechanism and design rationale in detail because
+of its interpretability -- every update is a one-line, physically
+readable statement (\emph{``the data's transition is narrower than the
+model's own, so raise $\eta_s$''}), auditable without any
+optimization-theory background, which none of the five methods in
+Section~\ref{sec:fitting} offer. We also ran it through the same
+500-half-cycle Monte Carlo ground-truth benchmark as those five
+(Section~\ref{sec:montecarlo}); the result is not a quantitative win --
+it is, if anything, the single clearest illustration in this paper of
+why the problem is hard, discussed alongside the other five methods'
+own results there rather than separately here.
 
 \section{Monte Carlo ground-truth comparison}
 \label{sec:montecarlo}
@@ -737,33 +744,37 @@ values compared against the known truth.
 \centering
 \small
 \caption{Correlation between extracted and true parameter values, 500-half-cycle
-noise-free Monte Carlo test. Bold marks the best method per row.}
+noise-free Monte Carlo test. Bold marks the best method per row. ``n/a''
+(rule-based column) means the refit value never changed from its initial
+seed across the entire 250-cycle run -- not a weak correlation, zero
+variation to correlate against at all; counted as 0 in that column's
+average.}
 \label{tab:montecarlo}
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrrrr}
 \toprule
-parameter & lsq & GA & directed GA & GA+lsq & CNN+lsq \\
+parameter & lsq & GA & directed GA & GA+lsq & CNN+lsq & rule-based \\
 \midrule
-$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 \\
-$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 \\
-$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 \\
-$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 \\
-$i_{on}$  & 0.24 & 0.06 & 0.00 & 0.04 & \textbf{0.78} \\
-$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} \\
-$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 \\
-$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 \\
-$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 \\
-$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 \\
+$v_s$     & \textbf{0.31} & 0.18 & 0.14 & 0.16 & 0.21 & $-$0.16 \\
+$\eta_s$  & 0.65 & 0.60 & 0.72 & \textbf{0.89} & 0.04 & $-$0.03 \\
+$r_{on}$  & 0.64 & \textbf{0.79} & 0.72 & 0.78 & 0.48 & n/a \\
+$a_{on}$  & \textbf{0.45} & 0.21 & 0.30 & 0.27 & 0.35 & n/a \\
+$i_{on}$  & 0.24 & 0.06 & 0.00 & 0.04 & \textbf{0.78} & n/a \\
+$v_r$     & 0.54 & 0.45 & 0.39 & 0.45 & \textbf{0.70} & $-$0.15 \\
+$\eta_r$  & \textbf{0.63} & 0.13 & 0.18 & 0.07 & 0.18 & $-$0.30 \\
+$r_{off}$ & 0.27 & 0.28 & \textbf{0.47} & 0.41 & 0.10 & 0.08 \\
+$a_{off}$ & \textbf{0.79} & 0.57 & 0.56 & 0.54 & 0.33 & n/a \\
+$i_{off}$ & 0.44 & 0.57 & 0.44 & \textbf{0.64} & $-$0.07 & n/a \\
 \midrule
-average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 \\
+average   & \textbf{0.50} & 0.38 & 0.39 & 0.42 & 0.31 & $-$0.06 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Table~\ref{tab:montecarlo} and Figure~\ref{fig:method-comparison} give the
 full result; Figure~\ref{fig:identifiability-scatter} shows the underlying
-scatter for lsq on four representative parameters. Four findings stand out.
+scatter for lsq on four representative parameters. Five findings stand out.
 
-First, plain lsq has the best \emph{average} correlation of the five
+First, plain lsq has the best \emph{average} correlation of the six
 methods (0.50), despite being by far the cheapest. Population-based and
 hybrid methods do not buy accuracy here; GA+lsq, at roughly 17 times lsq's
 cost, trails it by 0.08 on average. We take this as evidence that the
@@ -804,13 +815,41 @@ fit, not by a disagreement between the methods' underlying cost surfaces --
 but the gap does not close to zero even with noise removed, which is the
 residual, genuine non-identifiability this paper is about.
 
+Fifth, the rule-based extractor of Section~\ref{sec:fuzzy} is the clearest
+illustration of this paper's whole argument, not an outlier to it. A cold
+start from the NOMINAL card never produces a single parameter update at
+all on this data: the trial curve never switches enough to clear the
+procedure's own switching-state gate, so every one of the ten free
+parameters is skipped on the very first attempt. Chaining it cycle to
+cycle instead -- bootstrapping the first cycle, then warm-starting every
+subsequent one from the previous cycle's own output, the same continuity
+argument Section~\ref{sec:model} makes for the other five methods --
+avoids that complete stall, but on this blind, 250-cycle run five of
+its ten free parameters ($r_{on}, a_{on}, i_{on}, a_{off}, i_{off}$)
+never move even once past their very first bootstrap value, for the
+\emph{entire} run; the other five move but correlate weakly or
+negatively with truth ($-0.30$ to $0.08$). This is a sharper version of
+the bound-pinning pattern Section~\ref{sec:difficulty} documents for
+lsq/GA's $a_{on}$ (Figure~\ref{fig:bound-pinning}): there, an optimizer
+still revisits the parameter every window and rides a flat direction to
+a box edge; here, the gate that is supposed to protect each per-parameter
+update from an untrustworthy trial curve ends up protecting a stale
+value from ever being questioned again. We see this as independent
+confirmation, by a method with no gradient, no population, and no
+learned prior at all, that the difficulty documented throughout this
+paper is a property of the data, not an artifact of any one optimization
+strategy.
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/fig5_method_comparison.pdf}
   \caption{Correlation with the true, noise-free synthetic parameter value,
-  all ten free parameters, five extraction methods. No method is uniformly
+  all ten free parameters, six extraction methods. No method is uniformly
   best; $i_{on}$ and $v_s$ are weakly recovered by every method except, for
-  $i_{on}$, the CNN surrogate.}
+  $i_{on}$, the CNN surrogate. The rule-based extractor's bars sit at 0 for
+  $r_{on}, a_{on}, i_{on}, a_{off}, i_{off}$ because its own refit value
+  never changed across the entire run on those five parameters -- zero
+  variation to correlate against, not a weak correlation.}
   \label{fig:method-comparison}
 \end{figure}
 
