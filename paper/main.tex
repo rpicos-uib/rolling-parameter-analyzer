@@ -659,6 +659,67 @@ threshold at all given realistic fast-side parameters). They are correct
 and useful only as an input \emph{feature} alongside the raw curve, which
 is how they are used in the CNN+lsq method of Section~\ref{sec:fitting}.
 
+\subsection{A non-gradient alternative: the per-parameter (``fuzzy'') extractor}
+\label{sec:fuzzy}
+
+Every method in Section~\ref{sec:fitting} is, underneath, a gradient
+descent or a population search against a single joint cost function. The
+tooling released alongside this paper (Appendix~\ref{app:tool}) also
+includes a sixth, categorically different procedure, informally called
+the \emph{fuzzy extractor} after its tab in the viewer. The name is a
+historical artifact: an earlier version of this project genuinely worked
+by $\pm1$-vote ``fuzzy logic'' rules, one per parameter, combined and
+thresholded each round. That design was abandoned entirely -- not
+tuned, replaced -- after it proved hard to calibrate and audit, in
+favor of the mechanism described here, which keeps the name but not the
+voting.
+
+The current procedure never computes a joint Jacobian, a population, or
+even a single joint cost value: \texttt{rmse} is simulated and recorded
+purely as a reported diagnostic, by explicit design, and never decides
+whether a step is accepted or when the procedure stops. Instead, each of
+the ten free parameters ($\gamma$ held fixed, $g_0$ pinned by
+continuity, as throughout this paper) has its own extraction procedure,
+mapping a $(t,V,I)$ curve directly to a value in that parameter's own
+physical units. Several of these are exactly the relations of
+Section~\ref{sec:direct} applied literally, rather than used only as a
+GA lock or a CNN input feature: $v_s, v_r$ from the curvature detectors
+of Section~\ref{sec:direct}'s last subsection, $r_{on}, r_{off}$ from
+the near-$V{=}0$ relation of
+Eq.~\eqref{eq:nearzero}. One relation appears here for the first time:
+$\eta_s, \eta_r$ are read from the full width at half maximum, in time,
+of smoothed $|dI/dt|$'s own peak at the transition -- a narrower peak
+means faster switching, i.e.\ a larger $\eta_s$ or $\eta_r$, a direct
+geometric reading rather than a fit.
+
+At each visit, the parameter's own procedure is applied once to the
+real data and once to the model's own current simulated curve over the
+same window; the correction is driven by the difference between the two
+-- additive, directly in volts, for $v_s, v_r$; multiplicative, in log
+space, for the rest -- a genuine Newton-style correction in the
+parameter's own physical units, not a step along a joint gradient and
+not a vote. Parameters are visited one at a time, in a fixed order
+($v_r, v_s, i_{on}, r_{on}, r_{off}, a_{on}, a_{off}, i_{off}, \eta_s,
+\eta_r$), one correction per visit, for repeated full passes (up to 40)
+until a pass moves nothing. A real divergence found during development
+motivated capping each individual correction (to $\pm2\%$): an
+undamped multiplicative step could swing $i_{off}$ by a factor of 50 in
+one update, which then corrupted $r_{off}$'s own near-$V{=}0$
+extraction in turn (Eq.~\eqref{eq:nearzero} reads $r_{off}$ off a
+measurement that itself depends on $i_{off}$) -- a small, self-contained
+instance of exactly the kind of parameter entanglement
+Section~\ref{sec:difficulty} documents at the whole-chain scale.
+
+We report this method's mechanism and design rationale for
+completeness and because of its interpretability -- every update is a
+one-line, physically readable statement (\emph{``the data's transition
+is narrower than the model's own, so raise $\eta_s$''}), auditable
+without any optimization-theory background, which none of the five
+methods in Section~\ref{sec:fitting} offer. We have not run it through
+the same 500-half-cycle Monte Carlo ground-truth benchmark as those
+five (Section~\ref{sec:montecarlo}), so we make no quantitative accuracy
+claim for it here, alongside or against the others.
+
 \section{Monte Carlo ground-truth comparison}
 \label{sec:montecarlo}
 
@@ -986,11 +1047,11 @@ provides six views:
   20--30\% spurious reconstruction error that had nothing to do with the
   underlying extraction, which was correct throughout.
 \item \textbf{Fuzzy extractor} -- runs the project's interpretable,
-  per-parameter iterative extraction procedure live on one chosen cycle,
-  showing each individual parameter update (which parameter, its own
-  data-vs-model error, old and new value) rather than only a converged
-  endpoint, as an alternative, steppable lens alongside the joint
-  least-squares fit.
+  per-parameter iterative extraction procedure (Section~\ref{sec:fuzzy})
+  live on one chosen cycle, showing each individual parameter update
+  (which parameter, its own data-vs-model error, old and new value)
+  rather than only a converged endpoint, as an alternative, steppable
+  lens alongside the joint least-squares fit.
 \end{enumerate}
 
 Beyond the viewer itself, the repository also includes the fitting CLI
