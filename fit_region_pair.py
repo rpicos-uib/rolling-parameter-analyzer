@@ -430,15 +430,35 @@ def _measure_near_zero_slope(V_seg, I_seg):
     """Median dI/dV over the 7 samples nearest V=0 within this segment
     (V_seg sorted first) -- a plain, model-independent measurement of
     the near-V=0 I-V slope, used by `derive_ron_roff` below. Returns
-    None if there aren't enough samples."""
+    None if there aren't enough samples.
+
+    De-duplicates by V BEFORE sorting/gradient (fixed 2026-10-17, by
+    request, after `extract_fit.extract_fit()` was found silently
+    freezing ron/aon/ion/aoff/ioff for an entire 250-cycle Monte Carlo
+    chain -- traced to THIS function returning None every single time,
+    on every tested window: when `V_seg` spans a FULL 0->Vmax->0 (or
+    0->Vmin->0) half-cycle, the rising and falling edges revisit the
+    SAME quantized near-zero voltage levels (confirmed directly, e.g.
+    V=[0.01, 0.01, 0.02, 0.02, 0.03] right at the sorted array's own
+    center), so np.diff(Vs)==0 between the duplicates and np.gradient
+    divides by that zero spacing -- every one of the 7 nearest-to-zero
+    samples came back inf/nan, `seg` filtered to empty, None every time.
+    Averaging I across duplicate V's first removes the zero-spacing
+    case entirely while leaving the slope estimate itself unchanged on
+    any already-working input (strictly monotonic V has no duplicates
+    to average away)."""
     if len(V_seg) < 7:
         return None
     order = np.argsort(V_seg)
     Vs, Is = V_seg[order], I_seg[order]
+    Vs_u, inverse = np.unique(Vs, return_inverse=True)
+    if len(Vs_u) < 7:
+        return None
+    Is_u = np.bincount(inverse, weights=Is) / np.bincount(inverse)
     with np.errstate(divide="ignore", invalid="ignore"):
-        dIdV = np.gradient(Is, Vs)
-    j0 = int(np.argmin(np.abs(Vs)))
-    lo, hi = max(0, j0 - 3), min(len(Vs), j0 + 4)
+        dIdV = np.gradient(Is_u, Vs_u)
+    j0 = int(np.argmin(np.abs(Vs_u)))
+    lo, hi = max(0, j0 - 3), min(len(Vs_u), j0 + 4)
     seg = dIdV[lo:hi]
     seg = seg[np.isfinite(seg)]
     return float(np.median(seg)) if len(seg) else None
