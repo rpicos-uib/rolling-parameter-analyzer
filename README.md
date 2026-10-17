@@ -7,6 +7,7 @@ a chain of ReRAM switching measurements. It is the companion tool for
 
 > R. Picos, C. de Benito, O. Camps, "On the Inaccuracy of Global
 > Optimization Methods to Extract ReRAM Parameters" (in preparation).
+> Source and a compiled PDF are in [`paper/`](paper/main.pdf).
 
 The extraction pipeline that produces its input CSVs is not part of this
 repository; this tool is the *viewer*, built to make the per-cycle
