@@ -290,7 +290,9 @@ Appendix~\ref{app:tool}.
 
 \subsection{Production chain fit}
 
-The dataset is a sequence of triangular voltage sweeps, each cycle tracing
+The dataset is a real measurement on a TiN/Ti/HfO$_2$/W device from the
+same research group and measurement line as \cite{garcia2023temperature},
+a sequence of triangular voltage sweeps, each cycle tracing
 $0 \to V_{max} \to 0 \to V_{min} \to 0$. We split each cycle into its two
 half-cycles -- $0 \to V_{max} \to 0$ (SET side active) and
 $0 \to V_{min} \to 0$ (RESET side active) -- found from the raw voltage's
@@ -911,7 +913,8 @@ anyone extending this work.
 Every per-cycle figure in this paper (Figures~\ref{fig:fit-overlay},
 \ref{fig:bound-pinning}, and the trajectory view used while diagnosing the
 pin-escape and rmse-spike failure modes of Section~\ref{sec:fitting}) was
-produced with the aid of a tool we release alongside this paper:
+produced with the aid of a tool we release alongside this paper,
+\cite{rollinganalyzer}:
 
 \begin{center}
 \url{https://github.com/rpicos-uib/rolling-parameter-analyzer}
@@ -971,10 +974,20 @@ provides six views:
   least-squares fit.
 \end{enumerate}
 
-The repository includes the viewer together with the DMM forward model and
-the fitting routines it calls for live resimulation, under the MIT
-license; the production extraction pipeline that generates its input CSVs,
-and the measurement data itself, are not included.
+Beyond the viewer itself, the repository also includes the fitting CLI
+behind Section~\ref{sec:fitting} (\texttt{fit\_chain\_cli.py}, exposing
+four of the paper's five extraction methods -- lsq, GA, directed GA, and
+GA+lsq -- through one documented \texttt{--help}) and the Monte Carlo
+ground-truth generator and comparison script behind
+Section~\ref{sec:montecarlo} (\texttt{mc\_param\_recovery.py},
+\texttt{compare\_vs\_truth.py}), all under the MIT license. A small
+synthetic demo dataset is committed alongside them so every command the
+repository's own README documents -- generate, fit, validate, inspect --
+runs end to end on a fresh clone, with no dependency on the real
+measurement data \cite{garcia2023temperature}, which is not included. The
+paper's fifth method (the CNN surrogate) was a single exploratory pass,
+as Sections~\ref{sec:fitting} and~\ref{sec:montecarlo} already note, and
+its research-stage code is likewise not part of this release.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
